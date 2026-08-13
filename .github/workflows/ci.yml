@@ -1,0 +1,241 @@
+# FalconExam CI — Milestone 0 skeleton.
+#
+# Each language job detects whether its service exists yet and skips cleanly if not, so this
+# workflow is green on an empty scaffold and starts doing real work the moment Milestone 1 creates
+# services/api, apps/web and services/ai. Nothing here is a placeholder that needs replacing —
+# the detection stays, because it also keeps the workflow honest about what is actually being built.
+#
+# Release gates (SBOM, container scanning, dependency scanning, performance, chaos, accessibility
+# and AI evaluation suites) are Milestone 7 and live in a separate release workflow.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hygiene:
+    name: Repository hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: No secret-bearing files are tracked
+        run: |
+          set -euo pipefail
+          tracked="$(git ls-files \
+            | grep -E '(^|/)\.env($|\.)|\.(pem|key|p12)$|service-account.*\.json$|gcp-key.*\.json$' \
+            | grep -v '\.env\.example$' || true)"
+          if [ -n "$tracked" ]; then
+            echo "::error::Secret-bearing files are tracked in git:"
+            echo "$tracked"
+            exit 1
+          fi
+          echo "No secret-bearing filenames tracked."
+
+      - name: No secret material in file contents
+        run: |
+          set -euo pipefail
+          # This workflow itself contains the patterns, so exclude it from its own scan.
+          if git grep -nIE \
+              'BEGIN (RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY|AKIA[0-9A-Z]{16}|"type"[[:space:]]*:[[:space:]]*"service_account"' \
+              -- ':!.github/workflows/ci.yml'; then
+            echo "::error::Possible secret material found above. Remove it and rotate the credential."
+            exit 1
+          fi
+          echo "No secret material found."
+        # Milestone 5 replaces this with full secret scanning, dependency scanning and SBOM
+        # generation (threat model T-22, T-23). This catches the obvious cases until then.
+
+      - name: Compose file is valid
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
+          echo "docker-compose.yml is valid."
+
+  backend:
+    name: Backend (services/api)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect
+        id: detect
+        run: |
+          if [ -f services/api/build.gradle.kts ] || [ -f services/api/build.gradle ] || [ -f services/api/pom.xml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::services/api does not exist yet (Milestone 1) - backend checks skipped."
+          fi
+
+      - name: Set up Java 21
+        if: steps.detect.outputs.present == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Build, test and verify architecture rules
+        if: steps.detect.outputs.present == 'true'
+        working-directory: services/api
+        run: ./gradlew --no-daemon build
+        # `build` must include: spotless/format check, static analysis, ArchUnit module-boundary
+        # tests, unit tests and the cross-tenant isolation tests. A green backend job is meaningless
+        # if tenant isolation is not part of it.
+
+      - name: Upload test reports
+        if: steps.detect.outputs.present == 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-reports
+          path: services/api/**/build/reports/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+  frontend:
+    name: Frontend (apps/web)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect
+        id: detect
+        run: |
+          if [ -f apps/web/package.json ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::apps/web does not exist yet (Milestone 1) - frontend checks skipped."
+          fi
+
+      - name: Set up pnpm
+        if: steps.detect.outputs.present == 'true'
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node 22
+        if: steps.detect.outputs.present == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Install
+        if: steps.detect.outputs.present == 'true'
+        working-directory: apps/web
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint, type-check, test, build
+        if: steps.detect.outputs.present == 'true'
+        working-directory: apps/web
+        run: |
+          pnpm run lint
+          pnpm run typecheck
+          pnpm run test
+          pnpm run build
+
+  ai:
+    name: AI service (services/ai)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect
+        id: detect
+        run: |
+          if [ -f services/ai/pyproject.toml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::services/ai does not exist yet (Milestone 1) - AI checks skipped."
+          fi
+
+      - name: Set up uv
+        if: steps.detect.outputs.present == 'true'
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        if: steps.detect.outputs.present == 'true'
+        run: uv python install 3.12
+
+      - name: Lint, type-check, test
+        if: steps.detect.outputs.present == 'true'
+        working-directory: services/ai
+        run: |
+          uv sync --frozen
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run mypy .
+          uv run pytest
+
+  docs:
+    name: Documentation consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Required documents exist
+        run: |
+          set -euo pipefail
+          missing=0
+          # The global acceptance checklist requires these to be maintained every milestone.
+          for f in \
+            docs/STATUS.md \
+            docs/DECISIONS.md \
+            docs/KNOWN_LIMITATIONS.md \
+            docs/ROADMAP.md \
+            docs/architecture/overview.md \
+            docs/architecture/domain-boundaries.md \
+            docs/security/threat-model.md \
+            docs/privacy/data-flow-inventory.md \
+            development-kit/specs/acceptance-checklist.md
+          do
+            if [ ! -f "$f" ]; then
+              echo "::error::Required document missing: $f"
+              missing=1
+            fi
+          done
+          exit $missing
+
+      - name: No compliance claims
+        run: |
+          set -euo pipefail
+          # The specs forbid claiming legal compliance. Catch the phrasing early, in docs and code.
+          if git grep -nIE '(is|are|fully)[[:space:]]+(FERPA|GDPR|PIPEDA|SOC[[:space:]]*2|HIPAA)[[:space:]]*(compliant|certified)' \
+              -- ':!.github/workflows/ci.yml'; then
+            echo "::error::Compliance claim found. FalconExam provides controls; it does not claim compliance."
+            exit 1
+          fi
+          echo "No compliance claims found."
+
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
+    needs: [hygiene, backend, frontend, ai, docs]
+    if: always()
+    steps:
+      - name: Report
+        run: |
+          echo "hygiene:  ${{ needs.hygiene.result }}"
+          echo "backend:  ${{ needs.backend.result }}"
+          echo "frontend: ${{ needs.frontend.result }}"
+          echo "ai:       ${{ needs.ai.result }}"
+          echo "docs:     ${{ needs.docs.result }}"
+          if [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+            echo "::error::One or more CI jobs failed."
+            exit 1
+          fi

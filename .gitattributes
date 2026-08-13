@@ -1,0 +1,20 @@
+# Normalize line endings so a script written on Windows still runs inside a Linux container.
+# A .sh file with CRLF fails with "bad interpreter", which is a confusing way to lose an hour.
+
+* text=auto eol=lf
+
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+*.gradle    text eol=lf
+*.kts       text eol=lf
+
+*.ps1       text eol=crlf
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+
+# Keep the Gradle wrapper jar and any media fixtures byte-exact.
+*.jar   binary
+*.png   binary
+*.jpg   binary
+*.webm  binary
+*.mp4   binary

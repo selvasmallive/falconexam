@@ -1,0 +1,110 @@
+# FalconExam local development environment.
+#
+# Milestone 0 provides backing services only. The api, ai and web services are added by the
+# milestones that create them (see the commented profiles at the bottom).
+#
+# All state lives in Docker named volumes, never bind mounts — this repository may sit on a synced
+# drive, and bind-mounting a database directory there corrupts it (see A-04 in
+# docs/architecture/assumptions-and-conflicts.md).
+#
+#   cp .env.example .env && ./scripts/dev-up.sh        (or .\scripts\dev-up.ps1)
+
+name: falconexam
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: falconexam-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-falconexam}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-falconexam_local_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-falconexam}
+      # Deterministic collation so local behaviour matches Cloud SQL.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-falconexam} -d ${POSTGRES_DB:-falconexam}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  redis:
+    image: redis:7-alpine
+    container_name: falconexam-redis
+    restart: unless-stopped
+    # Sessions, LTI nonces and rate-limit counters. Nothing here is a system of record, but losing it
+    # mid-exam must not lose a session — persistence is on so a local restart behaves like Memorystore.
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  storage:
+    # Cloud Storage emulator. Signed-URL semantics differ from real GCS — see A-03; signed-URL expiry
+    # must also be verified against real GCS before Milestone 3 is accepted.
+    image: fsouza/fake-gcs-server:1.49
+    container_name: falconexam-storage
+    restart: unless-stopped
+    command:
+      - "-scheme=http"
+      - "-port=4443"
+      - "-public-host=localhost:${STORAGE_PORT:-4443}"
+      - "-external-url=http://localhost:${STORAGE_PORT:-4443}"
+      - "-backend=memory"
+    ports:
+      - "${STORAGE_PORT:-4443}:4443"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:4443/storage/v1/b?project=falconexam || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  mail:
+    # Catches every outbound notification locally. No mail ever leaves the machine.
+    image: axllent/mailpit:latest
+    container_name: falconexam-mail
+    restart: unless-stopped
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+      MP_MAX_MESSAGES: "500"
+    ports:
+      - "${MAIL_SMTP_PORT:-1025}:1025"
+      - "${MAIL_UI_PORT:-8025}:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+# Application services are added by later milestones. Each will declare
+#   depends_on: { postgres: { condition: service_healthy }, ... }
+# and run under a Compose profile so `dev-up` can start backing services alone.
+#
+#  api:   Milestone 1 — services/api      (profile: app)
+#  ai:    Milestone 1 health only,
+#         Milestone 4 pipeline            (profile: app)
+#  web:   Milestone 1 — apps/web          (profile: app)
+
+volumes:
+  postgres-data:
+  redis-data:
+
+networks:
+  default:
+    name: falconexam
