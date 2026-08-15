@@ -1,6 +1,8 @@
 # Status
 
-Last updated: 2026-08-12 · Milestone 0 (scaffolding) complete · Milestone 1 is next.
+Last updated: 2026-08-14 · Milestone 0 (scaffolding) complete · Milestone 1 is next.
+
+Published privately at [github.com/selvasmallive/falconexam](https://github.com/selvasmallive/falconexam).
 
 ## Where the product is
 
@@ -34,8 +36,8 @@ Report what was actually run, not what was intended.
 | --- | --- |
 | `docker compose config --quiet` | **Passed** — the Compose file parses and interpolates correctly |
 | `docker compose up` | **Not run.** The Docker daemon was not running on this machine. The environment is therefore *unverified*: it has never been started, and no health check has ever reported healthy |
-| CI workflow | **Not run.** No remote is configured, so no workflow run exists. The YAML has not been executed by GitHub Actions |
-| Secret scan | Performed manually over the tracked file list; the CI job automating it has not executed |
+| CI workflow | **Passed.** Run [31737271391](https://github.com/selvasmallive/falconexam/actions/runs/31737271391) on the Milestone 0 commit: all six jobs green, and the backend, frontend and AI jobs emitted their skip notices as designed. The run flagged deprecated action versions, which have since been bumped — that fix awaits its own run |
+| Secret scan | **Passed** in CI, and manually over the tracked file list |
 | Mermaid diagrams | Reviewed as source; not rendered by a Mermaid renderer |
 
 The first task of Milestone 1 should be to start the environment and confirm the health checks —

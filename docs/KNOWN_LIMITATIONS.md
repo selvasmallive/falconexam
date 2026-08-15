@@ -1,6 +1,6 @@
 # Known limitations
 
-Last updated: 2026-08-12 (Milestone 0).
+Last updated: 2026-08-14 (Milestone 0).
 
 Honest limitations are a product requirement here, not a courtesy. Institutions make purchasing and
 privacy decisions based on what this file says. Nothing may be removed from it because it is
@@ -21,8 +21,10 @@ detection, no review workflow, no retention engine, no entitlements, no deployme
 | Limitation | Impact | Resolution |
 | --- | --- | --- |
 | The local environment has never been started — the Docker daemon was not running when it was authored. `docker compose config` validates it; nothing has confirmed it runs | The Compose file may still fail on first use (image tags, health-check commands, port conflicts) | First task of Milestone 1 |
-| The CI workflow has never executed — there is no remote | Syntax and job logic are unverified against GitHub Actions | First push |
 | Mermaid diagrams were reviewed as source, not rendered | A diagram may fail to render | Any Markdown preview |
+
+The CI workflow has now executed and passed (all six jobs, with the language jobs skipping as
+designed). It is no longer an unverified artefact.
 
 ## Product limitations that will not change
 

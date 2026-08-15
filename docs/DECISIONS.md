@@ -70,7 +70,19 @@ The hygiene job fails on tracked secret-bearing files or secret material in cont
 fails on legal-compliance claims — the "is &lt;regime&gt; compliant/certified" phrasing, in any file. Both
 rules come straight from the specs and are cheapest to enforce before there is anything to fix.
 
-### D-008 · No GitHub remote was created
+### D-008 · Published as a private GitHub repository
 
-The repository is committed locally only. Creating or pushing to a remote publishes the work and is
-the owner's decision, not an implementation detail.
+`selvasmallive/falconexam`, private, `main` as the default branch. Scaffolding was committed locally
+first and published only on the owner's explicit instruction — publishing is the owner's decision,
+not an implementation detail.
+
+### D-009 · GitHub Actions pinned to current major versions
+
+The first CI run flagged `actions/checkout@v4` as running on a deprecated Node runtime; checking the
+rest showed every pinned action was several majors behind. All were bumped to their current majors
+(checkout v7, setup-java v5, setup-node v7, upload-artifact v7, pnpm/action-setup v6, setup-uv v10).
+
+Pinning to a major tag rather than a commit SHA is a deliberate trade for now: it keeps the skeleton
+readable and picks up security fixes automatically. Milestone 7 hardens this — SHA-pinning third-party
+actions is part of the supply-chain work under threat-model entry T-22, where a compromised action tag
+is the specific risk.
