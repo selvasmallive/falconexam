@@ -36,7 +36,7 @@ Report what was actually run, not what was intended.
 | --- | --- |
 | `docker compose config --quiet` | **Passed** — the Compose file parses and interpolates correctly |
 | `docker compose up` | **Not run.** The Docker daemon was not running on this machine. The environment is therefore *unverified*: it has never been started, and no health check has ever reported healthy |
-| CI workflow | **Passed.** Run [31737271391](https://github.com/selvasmallive/falconexam/actions/runs/31737271391) on the Milestone 0 commit: all six jobs green, and the backend, frontend and AI jobs emitted their skip notices as designed. The run flagged deprecated action versions, which have since been bumped — that fix awaits its own run |
+| CI workflow | **Passed.** Latest run [31926973432](https://github.com/selvasmallive/falconexam/actions/runs/31926973432): all six jobs green, no deprecation warnings, and the backend, frontend and AI jobs emitted their skip notices as designed. Three runs so far — the first surfaced deprecated action versions, the bump broke the AI job on an unresolvable tag, and this one is clean |
 | Secret scan | **Passed** in CI, and manually over the tracked file list |
 | Mermaid diagrams | Reviewed as source; not rendered by a Mermaid renderer |
 
