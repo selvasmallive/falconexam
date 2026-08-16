@@ -164,7 +164,9 @@ jobs:
 
       - name: Set up uv
         if: steps.detect.outputs.present == 'true'
-        uses: astral-sh/setup-uv@v10
+        # Pinned to an exact version: setup-uv stopped publishing floating major tags after v7,
+        # so `@v10` does not resolve. Bump deliberately.
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
 

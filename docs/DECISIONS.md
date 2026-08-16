@@ -80,9 +80,15 @@ not an implementation detail.
 
 The first CI run flagged `actions/checkout@v4` as running on a deprecated Node runtime; checking the
 rest showed every pinned action was several majors behind. All were bumped to their current majors
-(checkout v7, setup-java v5, setup-node v7, upload-artifact v7, pnpm/action-setup v6, setup-uv v10).
+(checkout v7, setup-java v5, setup-node v7, upload-artifact v7, pnpm/action-setup v6, and setup-uv
+pinned exactly at v10.0.1 because it stopped publishing floating major tags after v7).
 
 Pinning to a major tag rather than a commit SHA is a deliberate trade for now: it keeps the skeleton
 readable and picks up security fixes automatically. Milestone 7 hardens this — SHA-pinning third-party
 actions is part of the supply-chain work under threat-model entry T-22, where a compromised action tag
 is the specific risk.
+
+Worth remembering when editing CI: GitHub resolves **every** action referenced in a job at setup
+time, including steps whose `if` condition is false. An unresolvable action therefore fails a job
+that would otherwise have done nothing — which is exactly how the bad `setup-uv@v10` reference took
+down the AI job while the service does not yet exist.
